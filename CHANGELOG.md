@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.0.0) (2026-02-25)
+
+### Features
+
+- initial release of laravel-strongmigrations ([74c8d68](https://github.com/grazulex/laravel-strongmigrations/commit/74c8d687f188545f1f983759f6b22c2c7c153868))
+
+### Bug Fixes
+
+- **ci:** remove Feature testsuite from phpunit.xml ([cf7b92c](https://github.com/grazulex/laravel-strongmigrations/commit/cf7b92c10d64ef1732ba60013082aa1e8dd06469))
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
