@@ -1,0 +1,40 @@
+name: Feature Request
+description: Suggest a new idea or feature for Laravel Strong Migrations
+title: "[Feature] <Your short title here>"
+labels: [type:feature]
+body:
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Component
+      description: Which part of the package is affected?
+      options:
+        - rules
+        - analyzer
+        - config
+        - cli
+        - docs
+        - tests
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: need
+    attributes:
+      label: What problem does this feature solve?
+      placeholder: |
+        Describe the pain point or need you're trying to address.
+        Example: "Currently there's no rule for detecting..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe your proposed solution
+      placeholder: |
+        How would you implement this feature? Include examples if possible.
+    validations:
+      required: true

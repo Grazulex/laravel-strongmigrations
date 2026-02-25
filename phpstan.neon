@@ -1,0 +1,12 @@
+parameters:
+    level: 8
+
+    paths:
+        - src
+    bootstrapFiles:
+        - vendor/autoload.php
+
+    ignoreErrors:
+        - identifier: cast.string
+          path: src/Rules/*
+          message: '#Cannot cast array\|string\|null to string#'

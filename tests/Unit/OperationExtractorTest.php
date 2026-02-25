@@ -1,0 +1,187 @@
+<?php
+
+declare(strict_types=1);
+
+use Grazulex\StrongMigrations\Analyzer\MigrationAnalyzer;
+use Grazulex\StrongMigrations\Data\OperationType;
+
+it('detects dropColumn operations', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('legacy_field');
+            });
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    expect($operations)->toHaveCount(1);
+    expect($operations[0]->type)->toBe(OperationType::RemoveColumn);
+    expect($operations[0]->column)->toBe('legacy_field');
+});
+
+it('detects renameColumn operations', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::table('users', function (Blueprint $table) {
+                $table->renameColumn('name', 'full_name');
+            });
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    expect($operations)->toHaveCount(1);
+    expect($operations[0]->type)->toBe(OperationType::RenameColumn);
+    expect($operations[0]->details['from'])->toBe('name');
+    expect($operations[0]->details['to'])->toBe('full_name');
+});
+
+it('detects Schema::rename (rename table) operations', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::rename('users', 'members');
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    expect($operations)->toHaveCount(1);
+    expect($operations[0]->type)->toBe(OperationType::RenameTable);
+    expect($operations[0]->details['from'])->toBe('users');
+    expect($operations[0]->details['to'])->toBe('members');
+});
+
+it('detects Schema::dropIfExists operations', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::dropIfExists('users');
+            Schema::create('users', function ($table) {
+                $table->id();
+            });
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $dropOps = array_filter($operations, fn ($op) => $op->type === OperationType::DropTable);
+    expect($dropOps)->toHaveCount(1);
+});
+
+it('detects backfill in same migration', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('status')->nullable();
+            });
+
+            DB::table('users')->update(['status' => 'active']);
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_filter($operations, fn ($op) => $op->type === OperationType::Backfill);
+    expect($backfillOps)->toHaveCount(1);
+});
+
+it('skips operations inside safetyAssured', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
+    use Grazulex\StrongMigrations\StrongMigrations;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            StrongMigrations::safetyAssured(function () {
+                Schema::table('users', function (Blueprint $table) {
+                    $table->dropColumn('legacy_field');
+                });
+            });
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    foreach ($operations as $operation) {
+        expect($operation->insideSafetyAssured)->toBeTrue();
+    }
+});
+
+it('detects raw SQL statements', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            DB::statement('ALTER TABLE users ADD COLUMN test VARCHAR(255)');
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    expect($operations)->toHaveCount(1);
+    expect($operations[0]->type)->toBe(OperationType::RawSql);
+});

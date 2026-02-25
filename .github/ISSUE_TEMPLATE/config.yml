@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: General Discussion or Questions
+    url: https://github.com/Grazulex/laravel-strongmigrations/discussions
+    about: Please ask general questions, usage help, or share ideas here.
