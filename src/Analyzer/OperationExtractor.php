@@ -37,7 +37,6 @@ class OperationExtractor extends NodeVisitorAbstract
         'hasTable', 'hasColumn', 'hasColumns', 'hasIndex', 'hasView',
         'getColumnListing', 'getColumnType', 'getColumns', 'getTables',
         'getTableListing', 'getViews', 'getIndexes', 'getForeignKeys',
-        'connection', 'getConnection',
     ];
 
     /**
@@ -71,7 +70,7 @@ class OperationExtractor extends NodeVisitorAbstract
         if ($this->hasSchemaOperations && $this->hasDataOperations) {
             $operations[] = new Operation(
                 type: OperationType::Backfill,
-                insideSafetyAssured: ! ($this->hasUnassuredSchemaOperations && $this->hasUnassuredDataOperations),
+                insideSafetyAssured: ! ($this->hasUnassuredSchemaOperations || $this->hasUnassuredDataOperations),
             );
         }
 
