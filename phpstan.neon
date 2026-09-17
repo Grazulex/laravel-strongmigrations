@@ -9,4 +9,4 @@ parameters:
     ignoreErrors:
         - identifier: cast.string
           path: src/Rules/*
-          message: '#Cannot cast array\|string\|null to string#'
+          message: '#Cannot cast array\|string(\|null)? to string#'
