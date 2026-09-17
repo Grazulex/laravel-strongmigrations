@@ -29,6 +29,17 @@ class OperationExtractor extends NodeVisitorAbstract
     ];
 
     /**
+     * Read-only Schema builder methods. These introspect the schema and must
+     * NOT be counted as schema-mutating operations (a guard such as
+     * Schema::hasTable() does not lock anything).
+     */
+    private const SCHEMA_INTROSPECTION_METHODS = [
+        'hasTable', 'hasColumn', 'hasColumns', 'hasIndex', 'hasView',
+        'getColumnListing', 'getColumnType', 'getColumns', 'getTables',
+        'getTableListing', 'getViews', 'getIndexes', 'getForeignKeys',
+    ];
+
+    /**
      * @var array<Operation>
      */
     private array $operations = [];
@@ -40,6 +51,16 @@ class OperationExtractor extends NodeVisitorAbstract
     private bool $hasDataOperations = false;
 
     /**
+     * Whether the schema/data operations that trigger the backfill heuristic
+     * occurred outside a StrongMigrations::safetyAssured() block. Only an
+     * unassured combination should raise the (otherwise unsuppressable)
+     * backfill_in_migration violation.
+     */
+    private bool $hasUnassuredSchemaOperations = false;
+
+    private bool $hasUnassuredDataOperations = false;
+
+    /**
      * @return array<Operation>
      */
     public function getOperations(): array
@@ -49,7 +70,7 @@ class OperationExtractor extends NodeVisitorAbstract
         if ($this->hasSchemaOperations && $this->hasDataOperations) {
             $operations[] = new Operation(
                 type: OperationType::Backfill,
-                insideSafetyAssured: false,
+                insideSafetyAssured: ! ($this->hasUnassuredSchemaOperations || $this->hasUnassuredDataOperations),
             );
         }
 
@@ -125,7 +146,16 @@ class OperationExtractor extends NodeVisitorAbstract
 
     private function processSchemaCall(string $method, StaticCall $node): void
     {
+        // Read-only introspection (Schema::hasTable, hasColumn, ...) does not
+        // mutate the schema and must not flag the migration as schema work.
+        if (in_array($method, self::SCHEMA_INTROSPECTION_METHODS, true)) {
+            return;
+        }
+
         $this->hasSchemaOperations = true;
+        if (! $this->insideSafetyAssured) {
+            $this->hasUnassuredSchemaOperations = true;
+        }
 
         match ($method) {
             'rename' => $this->addRenameTableOperation($node),
@@ -146,11 +176,17 @@ class OperationExtractor extends NodeVisitorAbstract
 
             if ($sql !== null && preg_match('/^\s*(UPDATE|INSERT|DELETE)\b/i', $sql)) {
                 $this->hasDataOperations = true;
+                if (! $this->insideSafetyAssured) {
+                    $this->hasUnassuredDataOperations = true;
+                }
             }
         }
 
         if ($method === 'table') {
             $this->hasDataOperations = true;
+            if (! $this->insideSafetyAssured) {
+                $this->hasUnassuredDataOperations = true;
+            }
         }
     }
 

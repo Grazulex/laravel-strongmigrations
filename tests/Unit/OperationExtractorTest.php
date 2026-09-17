@@ -164,6 +164,121 @@ it('skips operations inside safetyAssured', function (): void {
     }
 });
 
+it('does not treat Schema introspection as a schema operation', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    // Schema::hasTable/hasColumn are read-only guards, not schema mutations,
+    // so combining them with a data update must NOT raise a backfill.
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            if (! Schema::hasTable('users') || ! Schema::hasColumn('users', 'status')) {
+                return;
+            }
+
+            DB::table('users')->update(['status' => 'active']);
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_filter($operations, fn ($op) => $op->type === OperationType::Backfill);
+    expect($backfillOps)->toHaveCount(0);
+});
+
+it('marks the backfill as safetyAssured when schema and data ops are wrapped', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+    use Grazulex\StrongMigrations\StrongMigrations;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            StrongMigrations::safetyAssured(function () {
+                Schema::rename('old_users', 'users');
+                DB::table('users')->update(['status' => 'active']);
+            });
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_values(array_filter($operations, fn ($op) => $op->type === OperationType::Backfill));
+    expect($backfillOps)->toHaveCount(1);
+    expect($backfillOps[0]->insideSafetyAssured)->toBeTrue();
+});
+
+it('detects backfill when schema op uses Schema::connection()', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    // connection() is a connection selector, not introspection: the schema
+    // mutation on the chained builder must still be counted.
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::connection('mysql')->table('users', function ($t) {
+                $t->string('foo')->nullable();
+            });
+            DB::table('users')->update(['foo' => 'x']);
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_filter($operations, fn ($op) => $op->type === OperationType::Backfill);
+    expect($backfillOps)->toHaveCount(1);
+});
+
+it('does not mark the backfill assured when only one half is wrapped', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    // The backfill is the unprotected part here, so it must NOT be suppressed.
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+    use Grazulex\StrongMigrations\StrongMigrations;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            StrongMigrations::safetyAssured(function () {
+                Schema::table('users', function ($t) { $t->string('foo')->nullable(); });
+            });
+
+            DB::table('users')->update(['foo' => 'x']);
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_values(array_filter($operations, fn ($op) => $op->type === OperationType::Backfill));
+    expect($backfillOps)->toHaveCount(1);
+    expect($backfillOps[0]->insideSafetyAssured)->toBeFalse();
+});
+
 it('detects raw SQL statements', function (): void {
     $analyzer = new MigrationAnalyzer;
 
