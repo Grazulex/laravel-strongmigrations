@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [1.1.0](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.1.0) (2026-09-17)
+
+### Added
+
+- Laravel 13 support (`illuminate/*` `^12.0|^13.0`)
+
+### Changed
+
+- PHP 8.3 is now the minimum supported version
+- Dev dependencies updated: Orchestra Testbench `^10.0|^11.0`, Pest `^3.8|^4.0`, Pest Laravel plugin `^3.2|^4.0`
+- **ci:** test matrix now covers PHP 8.3/8.4 x Laravel 12/13 (prefer-lowest and prefer-stable); the manual release workflow runs against Laravel 13
+- PHPStan ignore pattern adapted to the `__()` return type change in Laravel 13 (`array|string` instead of `array|string|null`)
+
+### Removed
+
+- Laravel 11 support (end of life)
+
 ## [1.0.1](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.0.1) (2026-09-17)
 
 ### Bug Fixes
@@ -19,9 +38,6 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - **ci:** remove Feature testsuite from phpunit.xml ([cf7b92c](https://github.com/grazulex/laravel-strongmigrations/commit/cf7b92c10d64ef1732ba60013082aa1e8dd06469))
-The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
-
-## [Unreleased]
 
 ### Added
 
