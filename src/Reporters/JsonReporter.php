@@ -17,7 +17,7 @@ class JsonReporter implements ReporterInterface
         $data = [
             'migration' => $migrationName,
             'violations_count' => count($violations),
-            'violations' => array_map(fn (Violation $v) => [
+            'violations' => array_map(fn (Violation $v): array => [
                 'rule_id' => $v->ruleId,
                 'severity' => $v->severity->value,
                 'message' => $v->message,

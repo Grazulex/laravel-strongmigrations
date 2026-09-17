@@ -81,7 +81,7 @@ class OperationExtractor extends NodeVisitorAbstract
         if ($this->hasSchemaOperations && $this->hasDataOperations) {
             $operations[] = new Operation(
                 type: OperationType::Backfill,
-                insideSafetyAssured: ! ($this->hasUnassuredSchemaOperations || $this->hasUnassuredDataOperations),
+                insideSafetyAssured: ! $this->hasUnassuredSchemaOperations && ! $this->hasUnassuredDataOperations,
             );
         }
 

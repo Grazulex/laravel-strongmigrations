@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **ci:** `actions/checkout` bumped to v5 in all workflows; `softprops/action-gh-release` bumped to v2 in the release workflow
+- `phpunit.xml` now references the PHPUnit 12.5 schema (was 10.1)
+- `rector.php` fixed for Rector 2.x (the removed `strictBooleans` prepared set made the `composer rector` script fail); Rector applied: explicit `array` return type on the `JsonReporter` closure, simplified boolean expression in `OperationExtractor`
+
 ## [1.1.0](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.1.0) (2026-09-17)
 
 ### Added
