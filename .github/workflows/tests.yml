@@ -14,13 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
+      # Laravel 11 is no longer tested: it reached security EOL in March 2026
+      # and Composer now refuses to install it because of open security
+      # advisories. The package still declares ^11.0 support in composer.json.
       matrix:
         php: [8.3, 8.4]
-        laravel: [11.*, 12.*]
+        laravel: [12.*]
         dependency-version: [prefer-lowest, prefer-stable]
         include:
-          - laravel: 11.*
-            testbench: 9.*
           - laravel: 12.*
             testbench: 10.*
         exclude:

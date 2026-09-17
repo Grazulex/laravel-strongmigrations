@@ -225,7 +225,7 @@ Returns exit code 1 if any violations are found.
 ## Requirements
 
 - PHP 8.2+
-- Laravel 11.x or 12.x
+- Laravel 11.x or 12.x (CI runs on 12.x only, as 11.x is end-of-life)
 
 ## Testing
 
