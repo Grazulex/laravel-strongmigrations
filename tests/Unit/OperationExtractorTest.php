@@ -279,6 +279,113 @@ it('does not mark the backfill assured when only one half is wrapped', function 
     expect($backfillOps[0]->insideSafetyAssured)->toBeFalse();
 });
 
+it('does not treat introspection on Schema::connection() as a schema operation', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    // The read-only guard is chained on connection(): it must still be
+    // recognised as introspection, not as a schema mutation.
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            if (! Schema::connection('tenant')->hasTable('users')) {
+                return;
+            }
+
+            DB::table('users')->update(['status' => 'active']);
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_filter($operations, fn ($op) => $op->type === OperationType::Backfill);
+    expect($backfillOps)->toHaveCount(0);
+});
+
+it('detects rename table chained on Schema::connection()', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::connection('tenant')->rename('old_users', 'users');
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    expect($operations)->toHaveCount(1);
+    expect($operations[0]->type)->toBe(OperationType::RenameTable);
+    expect($operations[0]->table)->toBe('old_users');
+    expect($operations[0]->details['to'])->toBe('users');
+});
+
+it('does not treat foreign key constraint toggles as a schema operation', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    // disable/enableForeignKeyConstraints only toggle a session setting, they
+    // do not mutate the schema. This is a very common data-migration pattern.
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            Schema::disableForeignKeyConstraints();
+            DB::table('users')->update(['status' => 'active']);
+            Schema::enableForeignKeyConstraints();
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_filter($operations, fn ($op) => $op->type === OperationType::Backfill);
+    expect($backfillOps)->toHaveCount(0);
+});
+
+it('does not treat index listing introspection as a schema operation', function (): void {
+    $analyzer = new MigrationAnalyzer;
+
+    $code = <<<'PHP'
+    <?php
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
+
+    return new class extends Migration {
+        public function up(): void
+        {
+            if (in_array('users_email_idx', Schema::getIndexListing('users'), true)) {
+                return;
+            }
+
+            DB::table('users')->update(['status' => 'active']);
+        }
+    };
+    PHP;
+
+    $operations = $analyzer->analyzeCode($code);
+
+    $backfillOps = array_filter($operations, fn ($op) => $op->type === OperationType::Backfill);
+    expect($backfillOps)->toHaveCount(0);
+});
+
 it('detects raw SQL statements', function (): void {
     $analyzer = new MigrationAnalyzer;
 

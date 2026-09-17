@@ -29,14 +29,25 @@ class OperationExtractor extends NodeVisitorAbstract
     ];
 
     /**
-     * Read-only Schema builder methods. These introspect the schema and must
-     * NOT be counted as schema-mutating operations (a guard such as
-     * Schema::hasTable() does not lock anything).
+     * Schema builder methods that do not mutate the schema. These must NOT be
+     * counted as schema-mutating operations: read-only introspection (a guard
+     * such as Schema::hasTable() does not lock anything), connection
+     * selectors, and session/builder settings.
      */
-    private const SCHEMA_INTROSPECTION_METHODS = [
+    private const SCHEMA_NON_MUTATING_METHODS = [
+        // Introspection
         'hasTable', 'hasColumn', 'hasColumns', 'hasIndex', 'hasView',
         'getColumnListing', 'getColumnType', 'getColumns', 'getTables',
-        'getTableListing', 'getViews', 'getIndexes', 'getForeignKeys',
+        'getTableListing', 'getViews', 'getIndexes', 'getIndexListing',
+        'getForeignKeys', 'getTypes', 'getSchemas', 'getCurrentSchemaName',
+        'getCurrentSchemaListing',
+        // Connection selectors
+        'connection', 'getConnection', 'setConnection',
+        // Session / builder settings
+        'disableForeignKeyConstraints', 'enableForeignKeyConstraints',
+        'withoutForeignKeyConstraints', 'defaultStringLength',
+        'defaultMorphKeyType', 'morphUsingUuids', 'morphUsingUlids',
+        'blueprintResolver', 'useNativeSchemaOperationsIfPossible',
     ];
 
     /**
@@ -89,6 +100,15 @@ class OperationExtractor extends NodeVisitorAbstract
             $this->processStaticCall($node);
         }
 
+        // Schema::connection('x')->foo(...): the actual schema method is the
+        // MethodCall chained on the connection selector.
+        if ($node instanceof MethodCall && $this->isSchemaConnectionCall($node->var)) {
+            $methodName = $this->resolveMethodName($node);
+            if ($methodName !== null) {
+                $this->processSchemaCall($methodName, $node);
+            }
+        }
+
         // Process method chains from the outermost call
         // Only process if this MethodCall is NOT the var of another MethodCall
         // (i.e., it's the top of the chain)
@@ -126,6 +146,19 @@ class OperationExtractor extends NodeVisitorAbstract
             && $methodName === 'safetyAssured';
     }
 
+    private function isSchemaConnectionCall(Node $node): bool
+    {
+        if (! $node instanceof StaticCall) {
+            return false;
+        }
+
+        $className = $this->resolveClassName($node);
+
+        return $className !== null
+            && ($className === 'Schema' || str_ends_with($className, '\Schema'))
+            && $this->resolveMethodName($node) === 'connection';
+    }
+
     private function processStaticCall(StaticCall $node): void
     {
         $className = $this->resolveClassName($node);
@@ -144,11 +177,11 @@ class OperationExtractor extends NodeVisitorAbstract
         }
     }
 
-    private function processSchemaCall(string $method, StaticCall $node): void
+    private function processSchemaCall(string $method, StaticCall|MethodCall $node): void
     {
-        // Read-only introspection (Schema::hasTable, hasColumn, ...) does not
-        // mutate the schema and must not flag the migration as schema work.
-        if (in_array($method, self::SCHEMA_INTROSPECTION_METHODS, true)) {
+        // Introspection, connection selectors and settings do not mutate the
+        // schema and must not flag the migration as schema work.
+        if (in_array($method, self::SCHEMA_NON_MUTATING_METHODS, true)) {
             return;
         }
 
@@ -408,7 +441,7 @@ class OperationExtractor extends NodeVisitorAbstract
         );
     }
 
-    private function addRenameTableOperation(StaticCall $node): void
+    private function addRenameTableOperation(StaticCall|MethodCall $node): void
     {
         $args = $node->getArgs();
         $from = isset($args[0]) ? $this->resolveStringValue($args[0]->value) : null;
@@ -422,7 +455,7 @@ class OperationExtractor extends NodeVisitorAbstract
         );
     }
 
-    private function addDropTableOperation(StaticCall $node): void
+    private function addDropTableOperation(StaticCall|MethodCall $node): void
     {
         $tableName = $this->getFirstStringArg($node);
 
