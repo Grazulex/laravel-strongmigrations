@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.0.1) (2026-09-17)
+
+### Bug Fixes
+
+- `safetyAssured()` now suppresses `backfill_in_migration`, and read-only `Schema` introspection (`hasTable`, `hasColumn`, ...) no longer counts as a schema mutation ([959142d](https://github.com/grazulex/laravel-strongmigrations/commit/959142d5a2e9f87424c5ccd8768d773fd20eb244), [#1](https://github.com/Grazulex/laravel-strongmigrations/pull/1)) — thanks @bp-behrooz
+- Methods chained on `Schema::connection()` are analyzed correctly; foreign key constraint toggles, builder settings and more read-only methods are no longer treated as schema mutations ([1e8f546](https://github.com/grazulex/laravel-strongmigrations/commit/1e8f546f9fd94051931ebf8a68e6a344b46cc4b4), [#2](https://github.com/Grazulex/laravel-strongmigrations/pull/2))
+- **ci:** drop Laravel 11 (security EOL) from the test matrix ([1e8f546](https://github.com/grazulex/laravel-strongmigrations/commit/1e8f546f9fd94051931ebf8a68e6a344b46cc4b4))
+
 ## [1.0.0](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.0.0) (2026-02-25)
 
 ### Features
