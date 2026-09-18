@@ -1,5 +1,11 @@
 # Laravel Strong Migrations
 
+> [!TIP]
+> **What Laravel Strong Migrations does for you** — Catch the migration that would lock your `users` table for ten minutes *before* it reaches production. Static analysis of your migrations with database-specific rules, in `block` or `warn` mode, ready for CI.
+>
+> **This package is free and maintained on my own time.** If it saves you hours, a small contribution helps me keep it going:
+> [💖 GitHub Sponsors](https://github.com/sponsors/Grazulex) · [☕ Buy Me a Coffee](https://buymeacoffee.com/grazulex) · [PayPal](https://paypal.me/strauven)
+
 [![Tests](https://github.com/grazulex/laravel-strongmigrations/actions/workflows/tests.yml/badge.svg)](https://github.com/grazulex/laravel-strongmigrations/actions/workflows/tests.yml)
 [![Code Quality](https://github.com/grazulex/laravel-strongmigrations/actions/workflows/code-quality.yml/badge.svg)](https://github.com/grazulex/laravel-strongmigrations/actions/workflows/code-quality.yml)
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/grazulex/laravel-strongmigrations.svg)](https://packagist.org/packages/grazulex/laravel-strongmigrations)
@@ -247,6 +253,14 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 ## Security
 
 If you discover a security vulnerability, please see [SECURITY.md](SECURITY.md).
+
+## Support This Package
+
+Laravel Strong Migrations is free, open source and maintained on my own time. If it saves you hours, here is how you can give back:
+
+- ⭐ **Star the repository** — it helps other developers find it
+- 🐦 **Share it** with your team and network
+- 💖 **[Sponsor on GitHub](https://github.com/sponsors/Grazulex)**, **[buy me a coffee](https://buymeacoffee.com/grazulex)** or **[donate via PayPal](https://paypal.me/strauven)** — every contribution funds maintenance, new features and Laravel upgrades
 
 ## License
 
