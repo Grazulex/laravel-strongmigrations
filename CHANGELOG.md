@@ -6,8 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.2.0](https://github.com/grazulex/laravel-strongmigrations/releases/tag/v1.2.0) (2026-10-08)
+
 ### Changed
 
+- **Minimum PHP version is now 8.4**: PHP 8.3 is no longer supported (#7)
+- CI test matrix now runs PHP 8.4 and 8.5 (#7)
 - **ci:** `actions/checkout` bumped to v5 in all workflows; `softprops/action-gh-release` bumped to v2 in the release workflow
 - `phpunit.xml` now references the PHPUnit 12.5 schema (was 10.1)
 - `rector.php` fixed for Rector 2.x (the removed `strictBooleans` prepared set made the `composer rector` script fail); Rector applied: explicit `array` return type on the `JsonReporter` closure, simplified boolean expression in `OperationExtractor`
