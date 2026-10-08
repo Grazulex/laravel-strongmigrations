@@ -230,7 +230,7 @@ Returns exit code 1 if any violations are found.
 
 ## Requirements
 
-- PHP 8.3+
+- PHP 8.4+
 - Laravel 12.x or 13.x
 
 ## Testing
