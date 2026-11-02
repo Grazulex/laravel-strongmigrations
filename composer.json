@@ -17,14 +17,14 @@
         "illuminate/support": "^12.0|^13.0",
         "illuminate/database": "^12.0|^13.0",
         "illuminate/console": "^12.0|^13.0",
-        "nikic/php-parser": "^5.0"
+        "nikic/php-parser": "^5.9"
     },
     "require-dev": {
-        "laravel/pint": "^1.22",
-        "pestphp/pest": "^3.8|^4.0",
-        "pestphp/pest-plugin-laravel": "^3.2|^4.0",
-        "larastan/larastan": "^3.4",
-        "rector/rector": "^2.0",
+        "laravel/pint": "^1.32",
+        "pestphp/pest": "^3.8|^4.7",
+        "pestphp/pest-plugin-laravel": "^3.2|^4.1",
+        "larastan/larastan": "^3.13",
+        "rector/rector": "^2.8",
         "orchestra/testbench": "^10.0|^11.0"
     },
     "minimum-stability": "stable",
