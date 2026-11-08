@@ -28,6 +28,9 @@ use Grazulex\StrongMigrations\Rules\PostgreSQL\AddUniqueConstraintRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\JsonColumnRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\SetNotNullRule as PgsqlSetNotNullRule;
 use Grazulex\StrongMigrations\Rules\RuleEngine;
+use Grazulex\StrongMigrations\Support\MigrationBaseline;
+use Grazulex\StrongMigrations\Support\MigrationTimeouts;
+use Illuminate\Database\Events\MigrationEnded;
 use Illuminate\Database\Events\MigrationStarted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -41,6 +44,7 @@ class StrongMigrationsServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/strong-migrations.php', 'strong-migrations');
 
         $this->app->singleton(MigrationAnalyzer::class);
+        $this->app->singleton(MigrationTimeouts::class);
 
         $this->app->singleton(RuleEngine::class, function (): RuleEngine {
             $engine = new RuleEngine;
@@ -101,6 +105,26 @@ class StrongMigrationsServiceProvider extends ServiceProvider
         }
 
         $this->registerMigrationListener();
+        $this->registerTimeoutsListener();
+    }
+
+    /**
+     * Registered after the check listener so that a blocked migration
+     * never leaves altered timeouts behind.
+     */
+    private function registerTimeoutsListener(): void
+    {
+        Event::listen(MigrationStarted::class, function (MigrationStarted $event): void {
+            /** @var MigrationTimeouts $timeouts */
+            $timeouts = $this->app->make(MigrationTimeouts::class);
+            $timeouts->apply(DB::connection($event->migration->getConnection()));
+        });
+
+        Event::listen(MigrationEnded::class, function (MigrationEnded $event): void {
+            /** @var MigrationTimeouts $timeouts */
+            $timeouts = $this->app->make(MigrationTimeouts::class);
+            $timeouts->restore(DB::connection($event->migration->getConnection()));
+        });
     }
 
     private function registerMigrationListener(): void
@@ -162,18 +186,7 @@ class StrongMigrationsServiceProvider extends ServiceProvider
 
     private function shouldSkipMigration(string $filePath): bool
     {
-        $startAfter = config('strong-migrations.start_after');
-        if ($startAfter === null) {
-            return false;
-        }
-
-        $migrationName = basename($filePath, '.php');
-
-        if (preg_match('/^(\d{4}_\d{2}_\d{2}_\d{6})/', $migrationName, $matches)) {
-            return $matches[1] <= $startAfter;
-        }
-
-        return false;
+        return MigrationBaseline::shouldSkip($filePath);
     }
 
     private function buildDatabaseContext(): DatabaseContext
