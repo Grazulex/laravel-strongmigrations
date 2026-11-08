@@ -123,6 +123,8 @@ php artisan migrate:check --format=github
 php artisan migrate:check --path=database/migrations
 ```
 
+`migrate:check` honours the `start_after` baseline: migration files whose timestamp is lower than or equal to `start_after` are skipped, exactly like the migration listener does.
+
 #### Analyze a specific migration
 
 ```bash
@@ -188,7 +190,8 @@ return [
     // Override auto-detected database version
     'database_version' => env('STRONG_MIGRATIONS_VERSION'),
 
-    // Skip migrations before this timestamp (format: YYYY_MM_DD_HHMMSS)
+    // Skip migrations up to this timestamp, inclusive (format: YYYY_MM_DD_HHMMSS).
+    // Applies to both `php artisan migrate` and `php artisan migrate:check`.
     'start_after' => null,
 
     // Disable specific rules by ID

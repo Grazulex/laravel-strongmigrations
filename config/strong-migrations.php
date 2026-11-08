@@ -56,6 +56,7 @@ return [
     | Useful when installing on an existing project to avoid
     | blocking old migrations already in production.
     | Format: migration name timestamp (e.g. '2026_01_01_000000')
+    | Applies to the migration listener and to `migrate:check`.
     |
     */
     'start_after' => null,

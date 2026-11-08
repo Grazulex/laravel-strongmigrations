@@ -11,6 +11,7 @@ use Grazulex\StrongMigrations\Reporters\ConsoleReporter;
 use Grazulex\StrongMigrations\Reporters\GithubActionsReporter;
 use Grazulex\StrongMigrations\Reporters\JsonReporter;
 use Grazulex\StrongMigrations\Rules\RuleEngine;
+use Grazulex\StrongMigrations\Support\MigrationBaseline;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Finder\Finder;
@@ -41,6 +42,17 @@ class MigrateCheckCommand extends Command
 
         if ($files === []) {
             $this->info('No migration files found.');
+
+            return self::SUCCESS;
+        }
+
+        $files = array_values(array_filter(
+            $files,
+            static fn (string $file): bool => ! MigrationBaseline::shouldSkip($file),
+        ));
+
+        if ($files === []) {
+            $this->info('No migration files to check after the start_after baseline.');
 
             return self::SUCCESS;
         }

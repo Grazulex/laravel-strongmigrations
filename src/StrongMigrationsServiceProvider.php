@@ -28,6 +28,7 @@ use Grazulex\StrongMigrations\Rules\PostgreSQL\AddUniqueConstraintRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\JsonColumnRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\SetNotNullRule as PgsqlSetNotNullRule;
 use Grazulex\StrongMigrations\Rules\RuleEngine;
+use Grazulex\StrongMigrations\Support\MigrationBaseline;
 use Illuminate\Database\Events\MigrationStarted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -162,18 +163,7 @@ class StrongMigrationsServiceProvider extends ServiceProvider
 
     private function shouldSkipMigration(string $filePath): bool
     {
-        $startAfter = config('strong-migrations.start_after');
-        if ($startAfter === null) {
-            return false;
-        }
-
-        $migrationName = basename($filePath, '.php');
-
-        if (preg_match('/^(\d{4}_\d{2}_\d{2}_\d{6})/', $migrationName, $matches)) {
-            return $matches[1] <= $startAfter;
-        }
-
-        return false;
+        return MigrationBaseline::shouldSkip($filePath);
     }
 
     private function buildDatabaseContext(): DatabaseContext
