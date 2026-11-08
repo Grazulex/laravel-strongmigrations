@@ -199,8 +199,27 @@ return [
         // 'remove_column',
         // 'raw_sql',
     ],
+
+    // Session timeouts applied while each migration runs (null = untouched)
+    'timeouts' => [
+        'statement_timeout' => '1h',   // PostgreSQL
+        'lock_timeout' => '10s',        // PostgreSQL
+        'lock_wait_timeout' => 10,      // MySQL / MariaDB (seconds)
+    ],
 ];
 ```
+
+### Timeouts
+
+When a migration starts, the configured timeouts are set on the migration's connection, so a migration waiting on a busy table fails fast instead of queueing every other query behind it. When the migration ends, the previous session values are restored.
+
+| Driver | Settings | Query |
+|--------|----------|-------|
+| PostgreSQL | `statement_timeout`, `lock_timeout` | `set_config(...)` (same as `SET`) |
+| MySQL / MariaDB | `lock_wait_timeout` | `SET SESSION lock_wait_timeout = ...` |
+| SQLite / others | — | nothing is executed |
+
+PostgreSQL values accept an integer (milliseconds) or a string with a unit (`'10s'`, `'1h'`). The MySQL value is a whole number of seconds. Set any key to `null` to leave that setting untouched. Timeouts are applied regardless of `safetyAssured` and `start_after`, and are not applied when the package is disabled (`enabled => false`).
 
 ## CI/CD Integration
 

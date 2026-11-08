@@ -91,13 +91,18 @@ return [
     | Recommended timeouts
     |--------------------------------------------------------------------------
     |
-    | Timeout for statements and locks during migrations.
+    | Session timeouts applied to the migration connection when each
+    | migration starts, and restored to their previous values when it ends.
+    | PostgreSQL uses `statement_timeout` and `lock_timeout` (integers are
+    | milliseconds, strings accept units such as '10s' or '1h').
+    | MySQL / MariaDB use `lock_wait_timeout` (seconds).
+    | Set a value to null to leave that setting untouched.
     |
     */
     'timeouts' => [
         'statement_timeout' => '1h',   // PostgreSQL
-        'lock_timeout' => '10s',        // PostgreSQL / MySQL
-        'lock_wait_timeout' => 10,      // MySQL (seconds)
+        'lock_timeout' => '10s',        // PostgreSQL
+        'lock_wait_timeout' => 10,      // MySQL / MariaDB (seconds)
     ],
 
     /*
