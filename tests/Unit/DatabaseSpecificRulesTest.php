@@ -119,6 +119,25 @@ it('pgsql: flags unique constraint', function (): void {
     expect($violation->ruleId)->toBe('add_unique_constraint');
 });
 
+it('pgsql: skips index, unique and foreign key on a new table', function (): void {
+    $context = new DatabaseContext('pgsql');
+
+    expect((new AddIndexNonConcurrentRule)->check(
+        new Operation(type: OperationType::AddIndex, table: 'posts', details: ['columns' => ['email'], 'column_count' => 1, 'new_table' => true]),
+        $context,
+    ))->toBeNull();
+
+    expect((new AddUniqueConstraintRule)->check(
+        new Operation(type: OperationType::AddUniqueConstraint, table: 'posts', column: 'email', details: ['new_table' => true]),
+        $context,
+    ))->toBeNull();
+
+    expect((new AddForeignKeyRule)->check(
+        new Operation(type: OperationType::AddForeignKey, table: 'posts', column: 'user_id', details: ['new_table' => true]),
+        $context,
+    ))->toBeNull();
+});
+
 // PostgreSQL: JsonColumnRule
 it('pgsql: flags json column', function (): void {
     $rule = new JsonColumnRule;

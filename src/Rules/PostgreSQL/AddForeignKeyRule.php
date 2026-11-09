@@ -24,6 +24,12 @@ class AddForeignKeyRule implements RuleInterface
             return null;
         }
 
+        // A foreign key declared inside Schema::create has no existing rows
+        // to validate, so NOT VALID + VALIDATE CONSTRAINT brings nothing.
+        if (($operation->details['new_table'] ?? false) === true) {
+            return null;
+        }
+
         $column = $operation->column ?? 'unknown';
 
         return new Violation(
