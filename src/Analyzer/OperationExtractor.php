@@ -29,6 +29,26 @@ class OperationExtractor extends NodeVisitorAbstract
     ];
 
     /**
+     * Blueprint methods that create a foreign id column which can be turned
+     * into a foreign key with ->constrained() or ->references().
+     */
+    private const FOREIGN_ID_METHODS = [
+        'foreignId', 'foreignIdFor', 'foreignUuid', 'foreignUlid',
+    ];
+
+    /**
+     * Blueprint methods that drop an index, keyed by method name and holding
+     * the kind of index being dropped.
+     */
+    private const DROP_INDEX_METHODS = [
+        'dropIndex' => 'index',
+        'dropUnique' => 'unique',
+        'dropPrimary' => 'primary',
+        'dropFullText' => 'fulltext',
+        'dropSpatialIndex' => 'spatial',
+    ];
+
+    /**
      * Schema builder methods that do not mutate the schema. These must NOT be
      * counted as schema-mutating operations: read-only introspection (a guard
      * such as Schema::hasTable() does not lock anything), connection
@@ -251,9 +271,19 @@ class OperationExtractor extends NodeVisitorAbstract
             return;
         }
 
+        if (isset(self::DROP_INDEX_METHODS[$methodName])) {
+            $this->addDropIndexOperation($node, self::DROP_INDEX_METHODS[$methodName]);
+
+            return;
+        }
+
         match ($methodName) {
             'dropColumn' => $this->addDropColumnOperation($node),
             'renameColumn' => $this->addRenameColumnOperation($node),
+            'dropForeign' => $this->addDropForeignOperation($node),
+            'dropForeignIdFor' => $this->addDropForeignIdForOperation($node, dropColumn: false),
+            'dropConstrainedForeignId' => $this->addDropConstrainedForeignIdOperation($node),
+            'dropConstrainedForeignIdFor' => $this->addDropForeignIdForOperation($node, dropColumn: true),
             default => null,
         };
     }
@@ -268,6 +298,11 @@ class OperationExtractor extends NodeVisitorAbstract
 
         // Check for specific standalone operations first
         $methodNames = array_column($chainMethods, 'name');
+
+        // $table->foreignId('user_id')->constrained() (or ->references()->on())
+        // creates a foreign key. Other modifiers in the same chain, such as
+        // ->index() or ->unique(), are still processed below.
+        $this->processForeignIdChain($chainMethods);
 
         if (in_array('index', $methodNames, true)) {
             $this->addIndexOperation($this->findMethodCallInChain($node, 'index'));
@@ -453,6 +488,163 @@ class OperationExtractor extends NodeVisitorAbstract
             details: $this->newTableDetails(),
             insideSafetyAssured: $this->insideSafetyAssured,
         );
+    }
+
+    /**
+     * Emit an AddForeignKey operation for foreignId()->constrained() and
+     * foreignId()->references()->on() chains.
+     *
+     * @param  array<array{name: string, node: MethodCall}>  $chainMethods
+     */
+    private function processForeignIdChain(array $chainMethods): void
+    {
+        $foreignIdCall = null;
+        $foreignIdMethod = null;
+        $constrainedCall = null;
+        $referencesCall = null;
+        $onCall = null;
+
+        foreach ($chainMethods as $info) {
+            if (in_array($info['name'], self::FOREIGN_ID_METHODS, true)) {
+                $foreignIdCall = $info['node'];
+                $foreignIdMethod = $info['name'];
+            }
+
+            if ($info['name'] === 'constrained') {
+                $constrainedCall = $info['node'];
+            } elseif ($info['name'] === 'references') {
+                $referencesCall = $info['node'];
+            } elseif ($info['name'] === 'on') {
+                $onCall = $info['node'];
+            }
+        }
+
+        if ($foreignIdCall === null || ($constrainedCall === null && $referencesCall === null)) {
+            return;
+        }
+
+        $columnName = $this->resolveForeignIdColumn($foreignIdCall, $foreignIdMethod);
+
+        $referencedTable = null;
+        if ($constrainedCall !== null) {
+            $referencedTable = $this->getFirstStringArg($constrainedCall);
+        } elseif ($onCall !== null) {
+            $referencedTable = $this->getFirstStringArg($onCall);
+        }
+
+        $this->operations[] = new Operation(
+            type: OperationType::AddForeignKey,
+            table: $this->currentCreatedTable(),
+            column: $columnName,
+            details: array_merge(
+                [
+                    'column_type' => $foreignIdMethod,
+                    'constrained' => $constrainedCall !== null,
+                    'referenced_table' => $referencedTable,
+                ],
+                $this->newTableDetails(),
+            ),
+            insideSafetyAssured: $this->insideSafetyAssured,
+        );
+    }
+
+    /**
+     * foreignIdFor(Model::class, 'column') takes the column name as its second
+     * argument; the other foreign id methods take it as their first one.
+     */
+    private function resolveForeignIdColumn(MethodCall $node, ?string $method): ?string
+    {
+        if ($method !== 'foreignIdFor') {
+            return $this->getFirstStringArg($node);
+        }
+
+        $args = $node->getArgs();
+
+        return isset($args[1]) ? $this->resolveStringValue($args[1]->value) : null;
+    }
+
+    private function addDropIndexOperation(MethodCall $node, string $indexType): void
+    {
+        $target = $this->resolveDropTarget($node);
+
+        $this->operations[] = new Operation(
+            type: OperationType::RemoveIndex,
+            column: $target['columns'][0] ?? null,
+            details: [
+                'index_type' => $indexType,
+                'index_name' => $target['name'],
+                'columns' => $target['columns'],
+            ],
+            insideSafetyAssured: $this->insideSafetyAssured,
+        );
+    }
+
+    private function addDropForeignOperation(MethodCall $node): void
+    {
+        $target = $this->resolveDropTarget($node);
+
+        $this->addRemoveForeignKeyOperation($target['columns'][0] ?? null, $target['name'], $target['columns']);
+    }
+
+    private function addDropConstrainedForeignIdOperation(MethodCall $node): void
+    {
+        $columnName = $this->getFirstStringArg($node);
+
+        $this->addRemoveForeignKeyOperation($columnName, null, $columnName === null ? [] : [$columnName]);
+        $this->addDropColumnOperation($node);
+    }
+
+    private function addDropForeignIdForOperation(MethodCall $node, bool $dropColumn): void
+    {
+        $columnName = $this->resolveForeignIdColumn($node, 'foreignIdFor');
+
+        $this->addRemoveForeignKeyOperation($columnName, null, $columnName === null ? [] : [$columnName]);
+
+        if ($dropColumn) {
+            $this->operations[] = new Operation(
+                type: OperationType::RemoveColumn,
+                column: $columnName,
+                insideSafetyAssured: $this->insideSafetyAssured,
+            );
+        }
+    }
+
+    /**
+     * @param  array<string>  $columns
+     */
+    private function addRemoveForeignKeyOperation(?string $columnName, ?string $foreignKeyName, array $columns): void
+    {
+        $this->operations[] = new Operation(
+            type: OperationType::RemoveForeignKey,
+            column: $columnName,
+            details: [
+                'foreign_key_name' => $foreignKeyName,
+                'columns' => $columns,
+            ],
+            insideSafetyAssured: $this->insideSafetyAssured,
+        );
+    }
+
+    /**
+     * Laravel drop methods accept either the index name (a string) or the
+     * list of indexed columns (an array) from which the name is derived.
+     *
+     * @return array{name: string|null, columns: array<string>}
+     */
+    private function resolveDropTarget(MethodCall $node): array
+    {
+        $args = $node->getArgs();
+        if (! isset($args[0])) {
+            return ['name' => null, 'columns' => []];
+        }
+
+        $arg = $args[0]->value;
+
+        if ($arg instanceof Node\Expr\Array_) {
+            return ['name' => null, 'columns' => $this->resolveIndexColumns($node)];
+        }
+
+        return ['name' => $this->resolveStringValue($arg), 'columns' => []];
     }
 
     private function isInsideCreateTable(): bool

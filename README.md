@@ -82,6 +82,28 @@ If a dangerous operation is detected:
 
 `add_index_non_concurrent`, `add_unique_constraint` and `add_foreign_key` only report changes to existing tables. Indexes, unique constraints and foreign keys declared inside `Schema::create()` (including `Schema::connection(...)->create()`) are not reported: the table is new and empty, so `CONCURRENTLY` or `NOT VALID` brings nothing there.
 
+### Foreign Keys and Index Removals
+
+Foreign keys are detected both with `$table->foreign('user_id')->references('id')->on('users')` and with the `foreignId()` shorthand. `foreignId()`, `foreignIdFor()`, `foreignUuid()` and `foreignUlid()` create a foreign key (an `add_foreign_key` operation) when chained with `->constrained()` or `->references()->on()`. A plain `$table->foreignId('user_id')` with neither only adds a column, so it is not reported as a foreign key.
+
+```php
+Schema::table('posts', function (Blueprint $table) {
+    $table->foreignId('user_id')->constrained();               // add_foreign_key on user_id
+    $table->foreignId('author_id')->constrained('users');      // add_foreign_key, referenced table "users"
+    $table->foreignIdFor(Team::class, 'team_id')->constrained(); // add_foreign_key on team_id
+});
+```
+
+The analyzer also emits removal operations that custom checks can consume (see [Custom Checks](#custom-checks)):
+
+| Blueprint method | Operation type(s) |
+|------------------|-------------------|
+| `dropForeign()`, `dropForeignIdFor()` | `OperationType::RemoveForeignKey` |
+| `dropConstrainedForeignId()`, `dropConstrainedForeignIdFor()` | `OperationType::RemoveForeignKey` + `OperationType::RemoveColumn` |
+| `dropIndex()`, `dropUnique()`, `dropPrimary()`, `dropFullText()`, `dropSpatialIndex()` | `OperationType::RemoveIndex` |
+
+`RemoveIndex` operations carry `index_type` (`index`, `unique`, `primary`, `fulltext` or `spatial`), `index_name` and `columns` in their details; `RemoveForeignKey` operations carry `foreign_key_name` and `columns`. When a column list is given (for example `dropForeign(['user_id'])`), the first column is also set as the operation column. Because `dropConstrainedForeignId()` drops the column too, it is reported by the `remove_column` rule.
+
 ## Usage
 
 ### Automatic Protection
