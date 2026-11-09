@@ -72,6 +72,16 @@ class OperationExtractor extends NodeVisitorAbstract
     private bool $hasUnassuredDataOperations = false;
 
     /**
+     * Stack of the Schema::create() calls currently being traversed, keyed by
+     * the object id of the call node and holding the created table name.
+     * Index, unique and foreign key operations found inside such a call target
+     * a table that does not exist yet, so they cannot lock existing rows.
+     *
+     * @var array<int, string|null>
+     */
+    private array $createTableStack = [];
+
+    /**
      * @return array<Operation>
      */
     public function getOperations(): array
@@ -128,6 +138,10 @@ class OperationExtractor extends NodeVisitorAbstract
     {
         if ($this->isSafetyAssuredCall($node)) {
             $this->insideSafetyAssured = false;
+        }
+
+        if ($node instanceof StaticCall || $node instanceof MethodCall) {
+            unset($this->createTableStack[spl_object_id($node)]);
         }
 
         return null;
@@ -188,6 +202,10 @@ class OperationExtractor extends NodeVisitorAbstract
         $this->hasSchemaOperations = true;
         if (! $this->insideSafetyAssured) {
             $this->hasUnassuredSchemaOperations = true;
+        }
+
+        if ($method === 'create') {
+            $this->createTableStack[spl_object_id($node)] = $this->getFirstStringArg($node);
         }
 
         match ($method) {
@@ -402,7 +420,11 @@ class OperationExtractor extends NodeVisitorAbstract
 
         $this->operations[] = new Operation(
             type: OperationType::AddIndex,
-            details: ['columns' => $indexColumns, 'column_count' => count($indexColumns)],
+            table: $this->currentCreatedTable(),
+            details: array_merge(
+                ['columns' => $indexColumns, 'column_count' => count($indexColumns)],
+                $this->newTableDetails(),
+            ),
             insideSafetyAssured: $this->insideSafetyAssured,
         );
     }
@@ -413,7 +435,9 @@ class OperationExtractor extends NodeVisitorAbstract
 
         $this->operations[] = new Operation(
             type: OperationType::AddUniqueConstraint,
+            table: $this->currentCreatedTable(),
             column: $columnName,
+            details: $this->newTableDetails(),
             insideSafetyAssured: $this->insideSafetyAssured,
         );
     }
@@ -424,9 +448,31 @@ class OperationExtractor extends NodeVisitorAbstract
 
         $this->operations[] = new Operation(
             type: OperationType::AddForeignKey,
+            table: $this->currentCreatedTable(),
             column: $columnName,
+            details: $this->newTableDetails(),
             insideSafetyAssured: $this->insideSafetyAssured,
         );
+    }
+
+    private function isInsideCreateTable(): bool
+    {
+        return $this->createTableStack !== [];
+    }
+
+    private function currentCreatedTable(): ?string
+    {
+        $lastKey = array_key_last($this->createTableStack);
+
+        return $lastKey === null ? null : $this->createTableStack[$lastKey];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function newTableDetails(): array
+    {
+        return $this->isInsideCreateTable() ? ['new_table' => true] : [];
     }
 
     private function addJsonColumnOperation(MethodCall $node): void

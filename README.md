@@ -80,6 +80,8 @@ If a dangerous operation is detected:
 | `json_column` | Using `json` instead of `jsonb` | Low |
 | `set_not_null_pgsql` | Setting NOT NULL (full table scan) | Medium |
 
+`add_index_non_concurrent`, `add_unique_constraint` and `add_foreign_key` only report changes to existing tables. Indexes, unique constraints and foreign keys declared inside `Schema::create()` (including `Schema::connection(...)->create()`) are not reported: the table is new and empty, so `CONCURRENTLY` or `NOT VALID` brings nothing there.
+
 ## Usage
 
 ### Automatic Protection

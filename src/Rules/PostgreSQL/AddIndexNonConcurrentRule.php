@@ -24,6 +24,12 @@ class AddIndexNonConcurrentRule implements RuleInterface
             return null;
         }
 
+        // An index created together with its table (inside Schema::create)
+        // cannot block writes: the table is new and empty.
+        if (($operation->details['new_table'] ?? false) === true) {
+            return null;
+        }
+
         return new Violation(
             ruleId: $this->id(),
             severity: Severity::Medium,
