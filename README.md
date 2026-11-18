@@ -79,8 +79,25 @@ If a dangerous operation is detected:
 | `add_unique_constraint` | Adding unique constraint | Medium |
 | `json_column` | Using `json` instead of `jsonb` | Low |
 | `set_not_null_pgsql` | Setting NOT NULL (full table scan) | Medium |
+| `add_column_volatile_default` | Adding a column with a volatile default (table rewrite) | High |
 
-`add_index_non_concurrent`, `add_unique_constraint` and `add_foreign_key` only report changes to existing tables. Indexes, unique constraints and foreign keys declared inside `Schema::create()` (including `Schema::connection(...)->create()`) are not reported: the table is new and empty, so `CONCURRENTLY` or `NOT VALID` brings nothing there.
+`add_index_non_concurrent`, `add_unique_constraint`, `add_foreign_key` and `add_column_volatile_default` only report changes to existing tables. Indexes, unique constraints and foreign keys declared inside `Schema::create()` (including `Schema::connection(...)->create()`) are not reported: the table is new and empty, so `CONCURRENTLY` or `NOT VALID` brings nothing there.
+
+### Volatile Defaults on PostgreSQL
+
+Since PostgreSQL 11, adding a column with a constant or stable default (`'active'`, `0`, `now()`, `CURRENT_TIMESTAMP`, `->useCurrent()`) only updates the catalog and is instant. A **volatile** default must be computed for every existing row, so PostgreSQL rewrites the whole table under an `ACCESS EXCLUSIVE` lock, whatever the version and whether the column is nullable or not. `add_column_volatile_default` reports these columns:
+
+```php
+Schema::table('users', function (Blueprint $table) {
+    $table->uuid('public_id')->default(DB::raw('gen_random_uuid()'));                 // reported
+    $table->timestamp('seen_at')->nullable()->default(new Expression('clock_timestamp()')); // reported
+    $table->timestamp('created_at')->useCurrent();                                    // not reported (stable)
+});
+```
+
+The rule inspects raw defaults written with `DB::raw('...')` or `new Expression('...')` and recognizes these volatile functions: `gen_random_uuid()`, `uuidv4()`, `uuidv7()`, `uuid_generate_v1()`, `uuid_generate_v1mc()`, `uuid_generate_v4()`, `uuid_generate_v7()`, `gen_random_bytes()`, `random()`, `random_normal()`, `clock_timestamp()`, `timeofday()` and `nextval()`. Plain string defaults are quoted by Laravel and never evaluated as SQL, so they are not reported. Columns declared inside `Schema::create()` are not reported either: the table is new and empty. On PostgreSQL versions older than 11 (not supported by this package), any default rewrites the table.
+
+The detected expression is available to custom checks: `AddColumn` operations carry `default_expression` and `volatile_default` in their details.
 
 ### Foreign Keys and Index Removals
 
@@ -271,7 +288,7 @@ Returns exit code 1 if any violations are found.
 |----------|---------|-------|
 | MySQL | 5.7+ | Version-aware rules (8.0.12+ allows instant ADD COLUMN) |
 | MariaDB | 10.2+ | Version-aware rules (10.3.2+ allows instant ADD COLUMN) |
-| PostgreSQL | 12+ | CONCURRENTLY, foreign key, and constraint rules |
+| PostgreSQL | 12+ | CONCURRENTLY, foreign key, constraint and volatile default rules |
 | SQLite | Any | Reduced rule set (safe for development) |
 
 ## Requirements

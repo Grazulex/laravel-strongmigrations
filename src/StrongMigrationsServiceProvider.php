@@ -22,6 +22,7 @@ use Grazulex\StrongMigrations\Rules\MySQL\AddColumnWithDefaultRule;
 use Grazulex\StrongMigrations\Rules\MySQL\ChangeColumnTypeRule;
 use Grazulex\StrongMigrations\Rules\MySQL\SetNotNullRule as MySqlSetNotNullRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\AddCheckConstraintRule;
+use Grazulex\StrongMigrations\Rules\PostgreSQL\AddColumnWithVolatileDefaultRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\AddForeignKeyRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\AddIndexNonConcurrentRule;
 use Grazulex\StrongMigrations\Rules\PostgreSQL\AddUniqueConstraintRule;
@@ -71,6 +72,7 @@ class StrongMigrationsServiceProvider extends ServiceProvider
             $engine->addRule(new AddUniqueConstraintRule);
             $engine->addRule(new JsonColumnRule);
             $engine->addRule(new PgsqlSetNotNullRule);
+            $engine->addRule(new AddColumnWithVolatileDefaultRule);
 
             /** @var array<string> $disabledChecks */
             $disabledChecks = config('strong-migrations.disabled_checks', []);
