@@ -93,6 +93,27 @@ Schema::table('your_table', function (Blueprint $table) {
 ALT,
     ],
 
+    'add_column_volatile_default' => [
+        'message' => 'Ajouter la colonne `:column` avec le default volatile `:expression` reecrit toute la table sur PostgreSQL, en bloquant lectures et ecritures.',
+        'safe_alternative' => <<<'ALT'
+Alternative sure :
+
+// Etape 1 : Ajouter la colonne nullable, sans default
+Schema::table('your_table', function (Blueprint $table) {
+    $table->uuid(':column')->nullable();
+});
+
+// Etape 2 : Definir le default (s'applique seulement aux nouvelles lignes, sans reecriture)
+DB::statement('ALTER TABLE your_table ALTER COLUMN :column SET DEFAULT :expression');
+
+// Etape 3 : Backfill les lignes existantes (migration separee, en batches)
+DB::statement('UPDATE your_table SET :column = :expression WHERE :column IS NULL');
+
+// Etape 4 : Si necessaire, appliquer NOT NULL via une contrainte CHECK NOT VALID
+// (voir la regle set_not_null_pgsql)
+ALT,
+    ],
+
     'change_column_type' => [
         'message' => 'Changer le type de la colonne `:column` necessite une reecriture de table qui bloque lectures et ecritures.',
         'safe_alternative' => <<<'ALT'

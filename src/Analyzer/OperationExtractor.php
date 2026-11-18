@@ -49,6 +49,18 @@ class OperationExtractor extends NodeVisitorAbstract
     ];
 
     /**
+     * PostgreSQL functions marked VOLATILE. A column added with such a
+     * function as its default value forces a full table rewrite, because the
+     * value has to be computed for every existing row.
+     */
+    private const VOLATILE_DEFAULT_FUNCTIONS = [
+        'gen_random_uuid', 'uuidv4', 'uuidv7',
+        'uuid_generate_v1', 'uuid_generate_v1mc', 'uuid_generate_v4', 'uuid_generate_v7',
+        'gen_random_bytes', 'random', 'random_normal',
+        'clock_timestamp', 'timeofday', 'nextval',
+    ];
+
+    /**
      * Schema builder methods that do not mutate the schema. These must NOT be
      * counted as schema-mutating operations: read-only introspection (a guard
      * such as Schema::hasTable() does not lock anything), connection
@@ -405,14 +417,92 @@ class OperationExtractor extends NodeVisitorAbstract
             return;
         }
 
-        if ($hasDefault && ! $isNullable) {
-            $this->operations[] = new Operation(
-                type: OperationType::AddColumn,
-                column: $columnName,
-                details: array_merge($details, ['has_default_not_null' => true]),
-                insideSafetyAssured: $this->insideSafetyAssured,
-            );
+        if (! $hasDefault) {
+            return;
         }
+
+        $defaultExpression = $this->resolveDefaultExpression($chainMethods);
+        $volatileDefault = $defaultExpression !== null && $this->isVolatileExpression($defaultExpression);
+
+        // A nullable column with a plain default is only reported when the
+        // default is volatile (it then rewrites the table on PostgreSQL).
+        if ($isNullable && ! $volatileDefault) {
+            return;
+        }
+
+        if (! $isNullable) {
+            $details['has_default_not_null'] = true;
+        }
+
+        if ($defaultExpression !== null) {
+            $details['default_expression'] = $defaultExpression;
+        }
+
+        if ($volatileDefault) {
+            $details['volatile_default'] = true;
+        }
+
+        $this->operations[] = new Operation(
+            type: OperationType::AddColumn,
+            table: $this->currentCreatedTable(),
+            column: $columnName,
+            details: array_merge($details, $this->newTableDetails()),
+            insideSafetyAssured: $this->insideSafetyAssured,
+        );
+    }
+
+    /**
+     * Return the SQL of a raw default value: ->default(DB::raw('...')) or
+     * ->default(new Expression('...')). Plain scalar defaults are quoted by
+     * Laravel and never evaluated as SQL, so they return null.
+     *
+     * @param  array<array{name: string, node: MethodCall}>  $chainMethods
+     */
+    private function resolveDefaultExpression(array $chainMethods): ?string
+    {
+        foreach ($chainMethods as $info) {
+            if ($info['name'] !== 'default') {
+                continue;
+            }
+
+            $args = $info['node']->getArgs();
+            if (! isset($args[0])) {
+                return null;
+            }
+
+            $value = $args[0]->value;
+
+            if ($value instanceof StaticCall) {
+                $className = $this->resolveClassName($value);
+                $isDbRaw = $className !== null
+                    && ($className === 'DB' || str_ends_with($className, '\DB'))
+                    && $this->resolveMethodName($value) === 'raw';
+
+                return $isDbRaw ? $this->getFirstStringArg($value) : null;
+            }
+
+            if ($value instanceof Node\Expr\New_ && $value->class instanceof Node\Name) {
+                $className = $value->class->toString();
+                $isExpression = $className === 'Expression' || str_ends_with($className, '\Expression');
+                $args = $value->getArgs();
+
+                return $isExpression && isset($args[0]) ? $this->resolveStringValue($args[0]->value) : null;
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    private function isVolatileExpression(string $expression): bool
+    {
+        $functions = implode('|', array_map(
+            static fn (string $function): string => preg_quote($function, '/'),
+            self::VOLATILE_DEFAULT_FUNCTIONS,
+        ));
+
+        return preg_match('/\b(?:'.$functions.')\s*\(/i', $expression) === 1;
     }
 
     /**
